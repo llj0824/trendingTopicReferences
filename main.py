@@ -1,6 +1,7 @@
 import tweepy
 import datetime
 import json
+from config import TWITTER_CREDENTIALS
 
 # Twitter API credentials
 consumer_key = TWITTER_CREDENTIALS["consumer_key"]
@@ -53,11 +54,10 @@ if __name__ == "__main__":
     search_query = " OR ".join(search_terms)
     
     # Search for tweets
-    tweets = search_tweets(search_query, count=100)
+    tweets = search_tweets(search_query)
     
     # Get trending topics
     trending_topics = get_trending_topics()
-    
     # Combine data
     data = {
         'search_query': search_query,
