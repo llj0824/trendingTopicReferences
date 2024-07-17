@@ -10,6 +10,7 @@ import json
 # If modifying these scopes, delete the file token.pickle.
 
 SCOPES = ['https://www.googleapis.com/auth/youtube.force-ssl']
+userQuery = "I'm making an article about Dr. Paul Conti's How to Improve Mental Health interview on Huberman Labs."
 categories = {
     1: 'Film & Animation',
     2: 'Autos & Vehicles',
@@ -48,28 +49,6 @@ trendingVideosNums = 3
 searchVideoNums = 3
 llm_api_utils = LLM_API_Utils()
 
-def get_authenticated_service():
-    creds = None
-    # The file token.pickle stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first time.
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'google_client_secret.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-
-    return build('youtube', 'v3', credentials=creds)
-
 def main():
     youtube = get_authenticated_service()
 
@@ -85,25 +64,11 @@ def main():
         for video in relevant_videos:
             video['top_comments'] = get_video_comments(youtube, video['id'])
 
-        # Get related videos and use LLM to generate new search terms
-        related_videos = []
-        for video in relevant_videos[:1]:  # Just use the first video for demo
-            related = get_related_videos(youtube, video['id'])
-            related_videos.extend(related)
-            
-            # Use LLM to generate new search terms
-            llm_input = f"Based on the video '{video['title']}', suggest related search terms."
-            llm_output = LLMUtils.callLLM(llm_input)
-            new_terms = extract_terms(llm_output)
-            
-            # Use new terms for another search
-            new_relevant_videos = search_videos(youtube, new_terms)
-            relevant_videos.extend(new_relevant_videos)
+        # TODO: use LLM to generate new more directed and get related videos from them.
 
         # Combine data
         data = {
             'trending_videos': trending_videos,
-            'relevant_videos': relevant_videos,
             'related_videos': related_videos,
             'timestamp': datetime.datetime.now().isoformat()
         }
@@ -112,13 +77,16 @@ def main():
         log_data(data)
 
         # Feed the log to LLM for analysis
-        analyze_trends(get_latest_log())
+        analysis_result = analyze_trends(get_latest_log())
+        
+        # Log the analysis result too
+        log_data(analysis_result, includeTimestampDivider=False)
 
         print(f"Data collected and saved to {datetime.datetime.now().strftime('%Y-%m-%d')}.log")
 
     except HttpError as e:
         print("An error occurred: %s" % e)
-        
+
 
 def get_trending_videos_by_category(youtube, category_id, max_results=trendingVideosNums):
     request = youtube.videos().list(
@@ -241,19 +209,43 @@ def search_videos(youtube, search_terms, max_results=searchVideoNums):
 
     return relevant_videos
 
-def log_data(data):
-    datasource = "youtube"
+def log_data(data, includeTimestampDivider=True):
+    datasource = "YouTube"
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     current_time = datetime.datetime.now().strftime('%H:%M:%S')
     filename = f"{today}.log"
     
     divider = "*" * 30
-    time_divider = f"{divider}\n youtube:{current_time} \n{divider}\n"
+    time_divider = f"{divider}\n YouTube:{current_time} \n{divider}\n"
     
     with open(filename, 'a') as f:
-        f.write(time_divider)
+        if includeTimestampDivider:
+            f.write(time_divider)
         f.write(json.dumps(data, indent=2))
         f.write("\n\n")
+
+def get_authenticated_service():
+    creds = None
+    # The file token.pickle stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first time.
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'google_client_secret.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with open('token.pickle', 'wb') as token:
+            pickle.dump(creds, token)
+
+    return build('youtube', 'v3', credentials=creds)
+
 
 if __name__ == "__main__":
     main()
