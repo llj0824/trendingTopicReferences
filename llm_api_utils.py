@@ -44,7 +44,7 @@ class LLM_API_Utils:
         response = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=data)
         return response.json()
 
-    def call_gpt4(self, model, system_role, prompt, max_tokens=4000, temperature=0.5):
+    def call_gpt4(self, prompt,model="gpt-4o", system_role="",max_tokens=4000, temperature=0.5):
         response = self.openai_client.chat.completions.create(
             model=model,
             messages=[{

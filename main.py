@@ -4,6 +4,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from llm_api_utils import LLM_API_Utils
 import datetime
 import json
 
@@ -14,36 +15,21 @@ userQuery = "I'm making an article about Dr. Paul Conti's How to Improve Mental 
 categories = {
     1: 'Film & Animation',
     2: 'Autos & Vehicles',
-    3: 'Music',
-    4: 'Pets & Animals',
-    5: 'Sports',
-    6: 'Short Movies',
-    7: 'Travel & Events',
-    8: 'Gaming',
-    9: 'Videoblogging',
-    10: 'People & Blogs',
-    11: 'Comedy',
-    12: 'Entertainment',
-    13: 'News & Politics',
-    14: 'Howto & Style',
-    15: 'Education',
-    16: 'Science & Technology',
-    17: 'Nonprofits & Activism',
-    18: 'Movies',
-    19: 'Anime/Animation',
-    20: 'Action/Adventure',
-    21: 'Classics',
-    22: 'Comedy',
-    23: 'Documentary',
-    24: 'Drama',
-    25: 'Family',
-    26: 'Foreign',
-    27: 'Horror',
-    28: 'Sci-Fi/Fantasy',
-    29: 'Thriller',
-    30: 'Shorts',
-    31: 'Shows',
-    32: 'Trailers'
+    10: 'Music',
+    15: 'Pets & Animals',
+    17: 'Sports',
+    18: 'Short Movies',
+    19: 'Travel & Events',
+    20: 'Gaming',
+    21: 'Videoblogging',
+    22: 'People & Blogs',
+    23: 'Comedy',
+    24: 'Entertainment',
+    25: 'News & Politics',
+    26: 'Howto & Style',
+    27: 'Education',
+    28: 'Science & Technology',
+    29: 'Nonprofits & Activism'
 }
 trendingVideosNums = 3
 searchVideoNums = 3
@@ -54,10 +40,10 @@ def main():
 
     try:
         # Get trending videos in specific categories
-        trending_videos = get_trending_videos_by_category(youtube, "27")  # Education category
+        trending_videos = get_trending_videos_by_categories(youtube, ["22"])
 
         # Search for relevant videos
-        search_terms = ["confidence", "exercise", "nutrition", "huberman", "mental health"]
+        search_terms = ["confidence", "exercise", "nutrition", "huberman"]
         relevant_videos = search_videos(youtube, search_terms)
 
         # Get comments for relevant videos
@@ -69,7 +55,7 @@ def main():
         # Combine data
         data = {
             'trending_videos': trending_videos,
-            'related_videos': related_videos,
+            'relevant_videos': relevant_videos,
             'timestamp': datetime.datetime.now().isoformat()
         }
 
@@ -88,28 +74,30 @@ def main():
         print("An error occurred: %s" % e)
 
 
-def get_trending_videos_by_category(youtube, category_id, max_results=trendingVideosNums):
-    request = youtube.videos().list(
-        part="snippet,statistics",
-        chart="mostPopular",
-        regionCode="US",
-        videoCategoryId=category_id,
-        maxResults=max_results
-    )
-    response = request.execute()
-
+def get_trending_videos_by_categories(youtube, category_ids, max_results=trendingVideosNums):
     trending_videos = []
-    for item in response['items']:
-        video = {
-            'id': item['id'],
-            'title': item['snippet']['title'],
-            'description': item['snippet']['description'],
-            'view_count': item['statistics']['viewCount'],
-            'like_count': item['statistics'].get('likeCount', 'N/A'),
-            'comment_count': item['statistics'].get('commentCount', 'N/A'),
-            'published_at': item['snippet']['publishedAt']
-        }
-        trending_videos.append(video)
+    for category_id in category_ids:
+        request = youtube.videos().list(
+            part="snippet,statistics",
+            chart="mostPopular",
+            regionCode="US",
+            videoCategoryId=category_id,
+            maxResults=max_results
+        )
+        response = request.execute()
+
+        for item in response['items']:
+            video = {
+                'id': item['id'],
+                'title': item['snippet']['title'],
+                'description': item['snippet']['description'],
+                'view_count': item['statistics']['viewCount'],
+                'like_count': item['statistics'].get('likeCount', 'N/A'),
+                'comment_count': item['statistics'].get('commentCount', 'N/A'),
+                'published_at': item['snippet']['publishedAt'],
+                'category_id': category_id
+            }
+            trending_videos.append(video)
     return trending_videos
 
 def get_video_comments(youtube, video_id, max_results=10):
@@ -164,11 +152,34 @@ def get_latest_log():
     return sections[-1]  # Return the last section
 
 def analyze_trends(log_data):
-    prompt = f"Analyze the following YouTube trending videos data and provide insights:\n\n{log_data}"
-    analysis = LLMUtils.callLLM(prompt)
+    system_role = """You are an expert content strategist and trend analyst. Your role is to analyze YouTube trending data and provide actionable insights for content creators. Focus on identifying relevant references that can be incorporated into their content to maximize engagement and traction."""
+
+    prompt = f"""
+        Analyze the following YouTube trending videos data and provide strategic insights for our upcoming content:
+        User Query: {userQuery}
+        Data: {log_data}
+
+        Based on this data and the user's query, provide an expert analysis addressing the following points:
+        1. Identify 3-5 specific references that could be incorporated into our content. References can include:
+           - Popular creators or channels
+           - Trending topics or themes
+           - Viral phrases or catchphrases
+           - Recent events or news items
+           - Emerging hashtags
+        2. For each reference, explain:
+           - Why it's relevant to our topic
+           - How it could be naturally integrated into our content
+           - The potential impact on engagement and traction
+        3. Suggest 2-3 content angles or hooks that leverage these trends and could make our article more appealing to the current audience.
+        4. Recommend any specific YouTube features or strategies (e.g., shorts, community posts, collaborations) that could boost visibility based on current trends.
+        5. Identify any potential risks or controversies associated with these trends that we should be aware of.
+        Provide your analysis in a clear, concise format that can be easily actioned by our content team.
+    """
+
+    analysis = llm_api_utils.call_gpt4(prompt=prompt, system_role=system_role)
     print("Trend Analysis:")
     print(analysis)
-
+    return analysis
 
 def search_videos(youtube, search_terms, max_results=searchVideoNums):
     search_query = " | ".join(search_terms)
@@ -196,6 +207,7 @@ def search_videos(youtube, search_terms, max_results=searchVideoNums):
         video_data = video_response['items'][0]
 
         video = {
+            'id': item['id']['videoId'],  # Add this line
             'title': video_data['snippet']['title'],
             'description': video_data['snippet']['description'],
             'channel_title': video_data['snippet']['channelTitle'],
