@@ -31,8 +31,8 @@ categories = {
     28: 'Science & Technology',
     29: 'Nonprofits & Activism'
 }
-trendingVideosNums = 3
-searchVideoNums = 3
+trendingVideosNums = 5
+searchVideoNums = 5
 videoCommentsNums = 5
 relatedVideosNums = 2
 llm_api_utils = LLM_API_Utils()
@@ -41,7 +41,6 @@ def main():
     youtube = get_authenticated_service()
 
     try:
-        
         print(f"Fetching trending videos in the {categories[22]} category...")
         trending_videos = get_trending_videos_by_categories(youtube, ["22"])
         print(f"Retrieved {len(trending_videos)} trending videos:")
@@ -66,34 +65,20 @@ def main():
         print("Initial analysis complete. Logging results...")
         log_data(initial_analysis, includeTimestampDivider=False)
 
-        print("\nExtracting new search terms and relevant video IDs from analysis...")
+        print("\nExtracting new search terms from analysis...")
         new_search_terms = extract_tag(analysis=initial_analysis, searchTerm="newSearchTerms")
-        relevant_video_ids = extract_tag(analysis=initial_analysis, searchTerm="relatedVideoIds")
         print(f"New search terms: {', '.join(new_search_terms)}")
-        
-        relevant_video_titles = get_video_titles(youtube, relevant_video_ids)
-        print("Relevant videos:")
-        for vid_id, title in relevant_video_titles.items():
-            print(f"  {title} (ID: {vid_id})")
 
         print("\nPerforming new search with extracted terms...")
         new_relevant_videos = search_videos(youtube, new_search_terms)
         print(f"Found {len(new_relevant_videos)} new relevant videos:")
         print_video_list(new_relevant_videos)
 
-        print("\nGetting related videos for relevant video IDs...")
-        related_videos = []
-        for video_id in relevant_video_ids:
-            related = get_related_videos(youtube, video_id)
-            related_videos.extend(related)
-            print(f"Found {len(related)} related videos for video ID: {video_id}")
-
         print("\nCombining all data...")
         final_data = {
             'trending_videos': trending_videos,
             'initial_relevant_videos': relevant_videos,
             'new_relevant_videos': new_relevant_videos,
-            'related_videos': related_videos,
             'timestamp': datetime.datetime.now().isoformat()
         }
 
@@ -105,7 +90,6 @@ def main():
         print("Final analysis complete. Logging results...")
         log_data(final_analysis, includeTimestampDivider=False)
 
-
         print(f"Data collection and analysis complete. Results saved to {datetime.datetime.now().strftime('%Y-%m-%d')}.log")
 
     except HttpError as e:
@@ -113,26 +97,12 @@ def main():
 
     print("Trend finder process completed.")
 
-def get_video_titles(youtube, video_ids):
-    """Get video titles for a list of video IDs."""
-    titles = {}
-    for i in range(0, len(video_ids), 50):  # YouTube API allows max 50 IDs per request
-        request = youtube.videos().list(
-            part="snippet",
-            id=','.join(video_ids[i:i+50])
-        )
-        response = request.execute()
-        for item in response['items']:
-            titles[item['id']] = item['snippet']['title']
-    return titles
-
 def print_video_list(video_list, max_display=5):
     """Print a list of videos with their titles, limiting the output."""
     for i, video in enumerate(video_list[:max_display]):
         print(f"  {i+1}. {video['title']} (ID: {video['id']})")
     if len(video_list) > max_display:
         print(f"  ... and {len(video_list) - max_display} more")
-
 
 def extract_tag(analysis, searchTerm):
     start_tag = f"<{searchTerm}>"
@@ -189,28 +159,6 @@ def get_video_comments(youtube, video_id, max_results=videoCommentsNums):
 
     return comments
 
-def get_related_videos(youtube, video_id, max_results=relatedVideosNums):
-    request = youtube.search().list(
-        part="snippet",
-        type="video",
-        relatedToVideoId=video_id,
-        maxResults=max_results
-    )
-    response = request.execute()
-
-    related_videos = []
-    for item in response['items']:
-        video = {
-            'id': item['id']['videoId'],
-            'title': item['snippet']['title'],
-            'description': item['snippet']['description'],
-            'channel_title': item['snippet']['channelTitle'],
-            'published_at': item['snippet']['publishedAt']
-        }
-        related_videos.append(video)
-
-    return related_videos
-
 def get_latest_log():
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     filename = f"{today}.log"
@@ -225,7 +173,7 @@ def analyze_trends(log_data, userQuery):
     Your analysis should include:
     - Trend analysis: Identifying and explaining trends, themes, or popular content
     - Actionable recommendations: How these insights can be applied to enhance content engagement and visibility.
-    - Search exploration: Suggest new search terms and highlight video IDs for further exploration based on relevance.
+    - Search exploration: Suggest new search terms based on relevance.
     """
     
     prompt = f"""
@@ -239,7 +187,6 @@ def analyze_trends(log_data, userQuery):
         3. Suggest how each reference can be integrated into the content.
         4. Highlight potential engagement benefits.
         5. Recommend 3 new search terms for further exploration.
-        6. Identify 3 video IDs that are most relevant and suggest exploring related videos.
 
         Structure your response as follows:
 
@@ -249,20 +196,10 @@ def analyze_trends(log_data, userQuery):
           - Integration method: [suggested method]
           - Engagement benefit: [explain]
 
-        Related Video IDs:
-        1. [video_id_1]: [brief explanation]
-        2. [video_id_2]: [brief explanation]
-        3. [video_id_3]: [brief explanation]
-
         Search Terms:
         1. [term1]: [brief explanation]
         2. [term2]: [brief explanation]
         3. [term3]: [brief explanation]
-
-
-        <relatedVideoIds>
-        ["term1", "term2", "term3"]
-        </relatedVideoIds>
 
         <newSearchTerms>
         ["term1", "term2", "term3"]
@@ -277,43 +214,60 @@ def analyze_trends(log_data, userQuery):
     return analysis
 
 def search_videos(youtube, search_terms, max_results=searchVideoNums):
+    # Combine the search terms into a single query string separated by " | "
     search_query = " | ".join(search_terms)
     
-    # Calculate the date one week ago
+    # Calculate the date one week ago in ISO format, required for YouTube API
     one_week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat() + "Z"
     
+    # Create a search request to the YouTube API
     request = youtube.search().list(
-        part="snippet",
-        q=search_query,
-        type="video",
-        maxResults=max_results,
-        order="viewCount",  # This sorts by view count, which can help identify trending videos
-        publishedAfter=one_week_ago
+        part="snippet",  # Request snippet information of the video
+        q=search_query,  # Query string for searching videos
+        type="video",  # Search only for videos
+        maxResults=max_results,  # Maximum number of results to return
+        order="relevance",  # Order results by view count
+        publishedAfter=one_week_ago  # Filter videos published within the last week
     )
+    
+    # Execute the search request and get the response
     response = request.execute()
 
+    # Initialize a list to store relevant video information
     relevant_videos = []
+
+    # Loop through each item (video) in the search response
     for item in response['items']:
+        # Create a request to get detailed information about the video using its ID
         video_response = youtube.videos().list(
-            part="snippet,statistics,topicDetails",
-            id=item['id']['videoId']
+            part="snippet,statistics,topicDetails",  # Request snippet, statistics, and topic details
+            id=item['id']['videoId']  # Video ID to fetch details for
         ).execute()
 
+        # Extract the video data from the response
         video_data = video_response['items'][0]
 
+        # Get comments for this video (assuming a function `get_video_comments` exists)
+        comments = get_video_comments(youtube, item['id']['videoId'])
+
+        # Create a dictionary with the relevant video information
         video = {
-            'id': item['id']['videoId'],  # Add this line
-            'title': video_data['snippet']['title'],
-            'description': video_data['snippet']['description'],
-            'channel_title': video_data['snippet']['channelTitle'],
-            'published_at': video_data['snippet']['publishedAt'],
-            'view_count': video_data['statistics'].get('viewCount', 'N/A'),
-            'like_count': video_data['statistics'].get('likeCount', 'N/A'),
-            'comment_count': video_data['statistics'].get('commentCount', 'N/A'),
-            'topics': video_data.get('topicDetails', {}).get('topicCategories', [])
+            'id': item['id']['videoId'],  # Video ID
+            'title': video_data['snippet']['title'],  # Video title
+            'description': video_data['snippet']['description'],  # Video description
+            'channel_title': video_data['snippet']['channelTitle'],  # Channel title
+            'published_at': video_data['snippet']['publishedAt'],  # Publish date
+            'view_count': video_data['statistics'].get('viewCount', 'N/A'),  # View count (default to 'N/A' if not available)
+            'like_count': video_data['statistics'].get('likeCount', 'N/A'),  # Like count (default to 'N/A' if not available)
+            'comment_count': video_data['statistics'].get('commentCount', 'N/A'),  # Comment count (default to 'N/A' if not available)
+            'topics': video_data.get('topicDetails', {}).get('topicCategories', []),  # Topic categories (default to empty list if not available)
+            'comments': comments  # Add comments fetched earlier to the video data
         }
+        
+        # Add the video information dictionary to the list of relevant videos
         relevant_videos.append(video)
 
+    # Return the list of relevant videos
     return relevant_videos
 
 def log_data(data, includeTimestampDivider=True):
@@ -333,13 +287,10 @@ def log_data(data, includeTimestampDivider=True):
 
 def get_authenticated_service():
     creds = None
-    # The file token.pickle stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first time.
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
     
-    # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -347,12 +298,10 @@ def get_authenticated_service():
             flow = InstalledAppFlow.from_client_secrets_file(
                 'google_client_secret.json', SCOPES)
             creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
 
     return build('youtube', 'v3', credentials=creds)
-
 
 if __name__ == "__main__":
     main()
