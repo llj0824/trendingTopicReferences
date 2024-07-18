@@ -8,8 +8,19 @@ from llm_api_utils import LLM_API_Utils
 import datetime
 import json
 
-# If modifying these scopes, delete the file token.pickle.
 
+"""
+This codebase creates a trend-finding tool for content creation, focusing on YouTube data. 
+It uses the YouTube API to fetch trending videos and search results, then analyzes them using GPT-4 to identify current trends and generate insights.
+
+Key features include:
+Fetching trending videos in specific categories [not very useful at all, can remove]
+Searching for relevant videos based on given terms
+Analyzing trends and generating new search terms using AI [useful, worth exploring and tuning more.]
+Logging data and analysis results for future reference
+
+Given a {userQuery} this tool can help you identify current trends and references to include in content to increase discoverability. 
+"""
 SCOPES = ['https://www.googleapis.com/auth/youtube.force-ssl']
 userQuery = "I'm making an article about Dr. Paul Conti's How to Improve Mental Health interview on Huberman Labs."
 categories = {
