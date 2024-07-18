@@ -33,46 +33,114 @@ categories = {
 }
 trendingVideosNums = 3
 searchVideoNums = 3
+videoCommentsNums = 5
+relatedVideosNums = 2
 llm_api_utils = LLM_API_Utils()
 
 def main():
     youtube = get_authenticated_service()
 
     try:
-        # Get trending videos in specific categories
+        
+        print(f"Fetching trending videos in the {categories[22]} category...")
         trending_videos = get_trending_videos_by_categories(youtube, ["22"])
+        print(f"Retrieved {len(trending_videos)} trending videos:")
+        print_video_list(trending_videos)
 
-        # Search for relevant videos
-        search_terms = ["confidence", "exercise", "nutrition", "huberman"]
-        relevant_videos = search_videos(youtube, search_terms)
+        initial_search_terms = ["confidence", "exercise", "nutrition", "huberman"]
+        print(f"\nSearching for videos with initial terms: {', '.join(initial_search_terms)}")
+        relevant_videos = search_videos(youtube, initial_search_terms)
+        print(f"Found {len(relevant_videos)} relevant videos:")
+        print_video_list(relevant_videos)
 
-        # Get comments for relevant videos
-        for video in relevant_videos:
-            video['top_comments'] = get_video_comments(youtube, video['id'])
-
-        # TODO: use LLM to generate new more directed and get related videos from them.
-
-        # Combine data
-        data = {
+        initial_data = {
             'trending_videos': trending_videos,
             'relevant_videos': relevant_videos,
             'timestamp': datetime.datetime.now().isoformat()
         }
 
-        # Log the data
-        log_data(data)
+        log_data(initial_data)
 
-        # Feed the log to LLM for analysis
-        analysis_result = analyze_trends(get_latest_log())
+        print("\nPerforming initial analysis...")
+        initial_analysis = analyze_trends(get_latest_log(), userQuery)
+        print("Initial analysis complete. Logging results...")
+        log_data(initial_analysis, includeTimestampDivider=False)
+
+        print("\nExtracting new search terms and relevant video IDs from analysis...")
+        new_search_terms = extract_tag(analysis=initial_analysis, searchTerm="newSearchTerms")
+        relevant_video_ids = extract_tag(analysis=initial_analysis, searchTerm="relatedVideoIds")
+        print(f"New search terms: {', '.join(new_search_terms)}")
         
-        # Log the analysis result too
-        log_data(analysis_result, includeTimestampDivider=False)
+        relevant_video_titles = get_video_titles(youtube, relevant_video_ids)
+        print("Relevant videos:")
+        for vid_id, title in relevant_video_titles.items():
+            print(f"  {title} (ID: {vid_id})")
 
-        print(f"Data collected and saved to {datetime.datetime.now().strftime('%Y-%m-%d')}.log")
+        print("\nPerforming new search with extracted terms...")
+        new_relevant_videos = search_videos(youtube, new_search_terms)
+        print(f"Found {len(new_relevant_videos)} new relevant videos:")
+        print_video_list(new_relevant_videos)
+
+        print("\nGetting related videos for relevant video IDs...")
+        related_videos = []
+        for video_id in relevant_video_ids:
+            related = get_related_videos(youtube, video_id)
+            related_videos.extend(related)
+            print(f"Found {len(related)} related videos for video ID: {video_id}")
+
+        print("\nCombining all data...")
+        final_data = {
+            'trending_videos': trending_videos,
+            'initial_relevant_videos': relevant_videos,
+            'new_relevant_videos': new_relevant_videos,
+            'related_videos': related_videos,
+            'timestamp': datetime.datetime.now().isoformat()
+        }
+
+        print("Logging final data...")
+        log_data(final_data)
+
+        print("\nPerforming final analysis...")
+        final_analysis = analyze_trends(get_latest_log(), userQuery)
+        print("Final analysis complete. Logging results...")
+        log_data(final_analysis, includeTimestampDivider=False)
+
+
+        print(f"Data collection and analysis complete. Results saved to {datetime.datetime.now().strftime('%Y-%m-%d')}.log")
 
     except HttpError as e:
         print("An error occurred: %s" % e)
 
+    print("Trend finder process completed.")
+
+def get_video_titles(youtube, video_ids):
+    """Get video titles for a list of video IDs."""
+    titles = {}
+    for i in range(0, len(video_ids), 50):  # YouTube API allows max 50 IDs per request
+        request = youtube.videos().list(
+            part="snippet",
+            id=','.join(video_ids[i:i+50])
+        )
+        response = request.execute()
+        for item in response['items']:
+            titles[item['id']] = item['snippet']['title']
+    return titles
+
+def print_video_list(video_list, max_display=5):
+    """Print a list of videos with their titles, limiting the output."""
+    for i, video in enumerate(video_list[:max_display]):
+        print(f"  {i+1}. {video['title']} (ID: {video['id']})")
+    if len(video_list) > max_display:
+        print(f"  ... and {len(video_list) - max_display} more")
+
+
+def extract_tag(analysis, searchTerm):
+    start_tag = f"<{searchTerm}>"
+    end_tag = f"</{searchTerm}>"
+    start_index = analysis.find(start_tag) + len(start_tag)
+    end_index = analysis.find(end_tag)
+    terms_string = analysis[start_index:end_index].strip()
+    return eval(terms_string)  # Convert string representation of list to actual list
 
 def get_trending_videos_by_categories(youtube, category_ids, max_results=trendingVideosNums):
     trending_videos = []
@@ -100,7 +168,7 @@ def get_trending_videos_by_categories(youtube, category_ids, max_results=trendin
             trending_videos.append(video)
     return trending_videos
 
-def get_video_comments(youtube, video_id, max_results=10):
+def get_video_comments(youtube, video_id, max_results=videoCommentsNums):
     request = youtube.commentThreads().list(
         part="snippet",
         videoId=video_id,
@@ -121,7 +189,7 @@ def get_video_comments(youtube, video_id, max_results=10):
 
     return comments
 
-def get_related_videos(youtube, video_id, max_results=5):
+def get_related_videos(youtube, video_id, max_results=relatedVideosNums):
     request = youtube.search().list(
         part="snippet",
         type="video",
@@ -151,7 +219,7 @@ def get_latest_log():
     sections = content.split("*" * 30)
     return sections[-1]  # Return the last section
 
-def analyze_trends(log_data):
+def analyze_trends(log_data, userQuery):
     system_role = """You are an expert content strategist and trend analyst. Your role is to analyze YouTube trending data and provide actionable insights for content creators. Ensure your response is structured and includes specific, clear recommendations. 
 
     Your analysis should include:
