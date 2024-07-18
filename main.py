@@ -152,28 +152,55 @@ def get_latest_log():
     return sections[-1]  # Return the last section
 
 def analyze_trends(log_data):
-    system_role = """You are an expert content strategist and trend analyst. Your role is to analyze YouTube trending data and provide actionable insights for content creators. Focus on identifying relevant references that can be incorporated into their content to maximize engagement and traction."""
+    system_role = """You are an expert content strategist and trend analyst. Your role is to analyze YouTube trending data and provide actionable insights for content creators. Ensure your response is structured and includes specific, clear recommendations. 
 
+    Your analysis should include:
+    - Trend analysis: Identifying and explaining trends, themes, or popular content
+    - Actionable recommendations: How these insights can be applied to enhance content engagement and visibility.
+    - Search exploration: Suggest new search terms and highlight video IDs for further exploration based on relevance.
+    """
+    
     prompt = f"""
-        Analyze the following YouTube trending videos data and provide strategic insights for our upcoming content:
+        Analyze the following YouTube trending data and suggest relevant references for our content creation:
         User Query: {userQuery}
         Data: {log_data}
 
-        Based on this data and the user's query, provide an expert analysis addressing the following points:
-        1. Identify 3-5 specific references that could be incorporated into our content. References can include:
-           - Popular creators or channels
-           - Trending topics or themes
-           - Viral phrases or catchphrases
-           - Recent events or news items
-           - Emerging hashtags
-        2. For each reference, explain:
-           - Why it's relevant to our topic
-           - How it could be naturally integrated into our content
-           - The potential impact on engagement and traction
-        3. Suggest 2-3 content angles or hooks that leverage these trends and could make our article more appealing to the current audience.
-        4. Recommend any specific YouTube features or strategies (e.g., shorts, community posts, collaborations) that could boost visibility based on current trends.
-        5. Identify any potential risks or controversies associated with these trends that we should be aware of.
-        Provide your analysis in a clear, concise format that can be easily actioned by our content team.
+        Provide the analysis addressing the following:
+        1. Identify and list 3 specific references relevant to the user query.
+        2. Explain why each reference is relevant.
+        3. Suggest how each reference can be integrated into the content.
+        4. Highlight potential engagement benefits.
+        5. Recommend 3 new search terms for further exploration.
+        6. Identify 3 video IDs that are most relevant and suggest exploring related videos.
+
+        Structure your response as follows:
+
+        Explanation:
+        1. [reference to include 1]
+          - Relevance: [explain]
+          - Integration method: [suggested method]
+          - Engagement benefit: [explain]
+
+        Related Video IDs:
+        1. [video_id_1]: [brief explanation]
+        2. [video_id_2]: [brief explanation]
+        3. [video_id_3]: [brief explanation]
+
+        Search Terms:
+        1. [term1]: [brief explanation]
+        2. [term2]: [brief explanation]
+        3. [term3]: [brief explanation]
+
+
+        <relatedVideoIds>
+        ["term1", "term2", "term3"]
+        </relatedVideoIds>
+
+        <newSearchTerms>
+        ["term1", "term2", "term3"]
+        </newSearchTerms>
+
+        Ensure that your response follows this exact structure, as it will be parsed programmatically.
     """
 
     analysis = llm_api_utils.call_gpt4(prompt=prompt, system_role=system_role)
