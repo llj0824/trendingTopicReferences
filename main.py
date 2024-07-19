@@ -45,7 +45,6 @@ def main():
             
             # Perform new search with extracted terms and log results
             relevant_videos = search_and_log(youtube, new_search_terms, log_title=f'Iteration {iteration + 1} Relevant Videos')
-            breakpoint()
         
         print("\nPerforming final analysis...")
         final_analysis = analyze_trends(get_latest_log(), userQuery)
@@ -113,9 +112,9 @@ def search_and_log(youtube, search_terms, log_title):
     print_video_list(relevant_videos)
 
     logged_data = {
-        log_title: log_title
-        search_terms: search_terms,
-        relevant_videos: relevant_videos,
+        'log_title': log_title,
+        'search_terms': search_terms,
+        'relevant_videos': relevant_videos,
         'timestamp': datetime.datetime.now().isoformat()
     }
 
