@@ -26,7 +26,7 @@ userQuery = "I'm making an article about Dr. Paul Conti's How to Improve Mental 
 searchVideoNums = 5
 videoCommentsNums = 5
 relatedVideosNums = 2
-llm_iterations = 3
+llm_iterations = 2
 llm_api_utils = LLM_API_Utils()
 
 def main():
@@ -47,7 +47,7 @@ def main():
             relevant_videos = search_and_log(youtube, new_search_terms, log_title=f'Iteration {iteration + 1} Relevant Videos')
         
         print("\nPerforming final analysis...")
-        final_analysis = analyze_trends(get_latest_log(), userQuery)
+        final_analysis = llm_final_recommendation(get_latest_log(), userQuery)
         print("Final analysis complete. Logging results...")
         log_data(final_analysis, includeTimestampDivider=False)
 
@@ -90,6 +90,7 @@ def analyze_for_new_terms(log_data, userQuery):
         Broader:
         1. [broad_term1]: [brief explanation]
         2. [broad_term2]: [brief explanation]
+        2. [broad_term3]: [brief explanation]
 
 
         <newSearchTerms>
@@ -165,7 +166,7 @@ def get_latest_log():
     sections = content.split("*" * 30)
     return sections[-1]  # Return the last section
 
-def analyze_trends(log_data, userQuery):
+def llm_final_recommendation(log_data, userQuery):
     system_role = """You are an expert content strategist and trend analyst. Your role is to analyze YouTube trending data and provide actionable insights for content creators. Ensure your response is structured and includes specific, clear recommendations. 
 
     Your analysis should include:
@@ -175,35 +176,40 @@ def analyze_trends(log_data, userQuery):
     """
     
     prompt = f"""
-        Analyze the following YouTube trending data and suggest relevant references for our content creation:
-        User Query: {userQuery}
-        Data: {log_data}
+    Analyze the provided data on content trends, audience engagement, and relevant topics. Based on this analysis, generate a comprehensive strategy to optimize the user's content for maximum reach, engagement, and relevance. Provide practical strategies for content structuring, SEO optimization, and multimedia integration:
 
-        Provide the analysis addressing the following:
-        1. Identify and list 3 specific references relevant to the user query.
-        2. Explain why each reference is relevant.
-        3. Suggest how each reference can be integrated into the content.
-        4. Highlight potential engagement benefits.
-        5. Recommend 3 new search terms for further exploration.
+    Structure your output as follows:
+    1. Audience Insights and Preferences:
+       a. [Insight 1]
+          - Evidence: [Data or observation supporting this insight]
+          - Application: [How to apply this insight to the content]
+          - Expected impact: [Predicted effect on audience engagement]
+       b. Needs/Questions: [Audience Need 1, Audience Need 2]
+          - Context: [Explain why this is important to the audience]
+          - Addressing method: [How to address this in the content]
+          - Value proposition: [What the audience gains from this information]
+          - Key Characteristics: 
+             - Age Range: [Age Range]
+       [Continue with more]
 
-        Structure your response as follows:
+    2. SEO and Discoverability Recommendations:
+       a. [Recommendation 1]
+          - Rationale: [Why this recommendation is important]
+          - Implementation: [How to implement this recommendation]
+          - Potential keywords: [List of relevant keywords, if applicable]
 
-        Explanation:
-        1. [reference to include 1]
-          - Relevance: [explain]
-          - Integration method: [suggested method]
-          - Engagement benefit: [explain]
+       [Continue for 2-3 recommendations]
 
-        Search Terms:
-        1. [term1]: [brief explanation]
-        2. [term2]: [brief explanation]
-        3. [term3]: [brief explanation]
+    3. Content Structure and Presentation Strategies:
+       a. [Strategy 1]
+          - Description: [Explain the strategy]
+          - Benefits: [List the benefits of this approach]
+          - Examples: [Provide brief examples of how to execute this strategy]
 
-        <newSearchTerms>
-        ["term1", "term2", "term3"]
-        </newSearchTerms>
+       [Continue for 2-3 strategies]
 
-        Ensure that your response follows this exact structure, as it will be parsed programmatically.
+    4. Conclusion:
+    Summarize the key points and provide a recommendations to maximize the content’s impact and reach. Ensure that all recommendations are specific, actionable, and directly relevant to the user’s content based on the provided data. Include concrete items such as references to specific names, people, or terms. Avoid broad and obvious advice like “make content engaging,” “optimize your video titles, descriptions, and tags,” or “hook viewers early.” Focus on providing direct, usable references. Your analysis will be read by content creator with specific content and it needs to be useful enough to make their content more targetable and discoverable by including specific trending nouns or verbage.
     """
 
     analysis = llm_api_utils.call_gpt4(prompt=prompt, system_role=system_role)
