@@ -23,79 +23,30 @@ Given a {userQuery} this tool can help you identify current trends and reference
 """
 SCOPES = ['https://www.googleapis.com/auth/youtube.force-ssl']
 userQuery = "I'm making an article about Dr. Paul Conti's How to Improve Mental Health interview on Huberman Labs."
-categories = {
-    1: 'Film & Animation',
-    2: 'Autos & Vehicles',
-    10: 'Music',
-    15: 'Pets & Animals',
-    17: 'Sports',
-    18: 'Short Movies',
-    19: 'Travel & Events',
-    20: 'Gaming',
-    21: 'Videoblogging',
-    22: 'People & Blogs',
-    23: 'Comedy',
-    24: 'Entertainment',
-    25: 'News & Politics',
-    26: 'Howto & Style',
-    27: 'Education',
-    28: 'Science & Technology',
-    29: 'Nonprofits & Activism'
-}
-trendingVideosNums = 5
 searchVideoNums = 5
 videoCommentsNums = 5
 relatedVideosNums = 2
+llm_iterations = 3
 llm_api_utils = LLM_API_Utils()
 
 def main():
     youtube = get_authenticated_service()
 
     try:
-        print(f"Fetching trending videos in the {categories[22]} category...")
-        trending_videos = get_trending_videos_by_categories(youtube, ["22"])
-        print(f"Retrieved {len(trending_videos)} trending videos:")
-        print_video_list(trending_videos)
-
-        initial_search_terms = ["confidence", "exercise", "nutrition", "huberman"]
-        print(f"\nSearching for videos with initial terms: {', '.join(initial_search_terms)}")
-        relevant_videos = search_videos(youtube, initial_search_terms)
-        print(f"Found {len(relevant_videos)} relevant videos:")
-        print_video_list(relevant_videos)
-
-        initial_data = {
-            'trending_videos': trending_videos,
-            'relevant_videos': relevant_videos,
-            'timestamp': datetime.datetime.now().isoformat()
-        }
-
-        log_data(initial_data)
-
-        print("\nPerforming initial analysis...")
-        initial_analysis = analyze_trends(get_latest_log(), userQuery)
-        print("Initial analysis complete. Logging results...")
-        log_data(initial_analysis, includeTimestampDivider=False)
-
-        print("\nExtracting new search terms from analysis...")
-        new_search_terms = extract_tag(analysis=initial_analysis, searchTerm="newSearchTerms")
-        print(f"New search terms: {', '.join(new_search_terms)}")
-
-        print("\nPerforming new search with extracted terms...")
-        new_relevant_videos = search_videos(youtube, new_search_terms)
-        print(f"Found {len(new_relevant_videos)} new relevant videos:")
-        print_video_list(new_relevant_videos)
-
-        print("\nCombining all data...")
-        final_data = {
-            'trending_videos': trending_videos,
-            'initial_relevant_videos': relevant_videos,
-            'new_relevant_videos': new_relevant_videos,
-            'timestamp': datetime.datetime.now().isoformat()
-        }
-
-        print("Logging final data...")
-        log_data(final_data)
-
+        print(f"Finding trending topics for query: {userQuery}")
+        log_data("", includeTimestampDivider=True) # starts a new log for this run.
+        for iteration in range(llm_iterations):
+            print(f"\nIteration {iteration + 1} analysis and search...")
+            
+            # Perform analysis to get new search terms.
+            # Note: on initial search just uses userQuery
+            latest_log = get_latest_log()
+            new_search_terms = analyze_for_new_terms(latest_log, userQuery)
+            
+            # Perform new search with extracted terms and log results
+            relevant_videos = search_and_log(youtube, new_search_terms, log_title=f'Iteration {iteration + 1} Relevant Videos')
+            breakpoint()
+        
         print("\nPerforming final analysis...")
         final_analysis = analyze_trends(get_latest_log(), userQuery)
         print("Final analysis complete. Logging results...")
@@ -107,6 +58,69 @@ def main():
         print("An error occurred: %s" % e)
 
     print("Trend finder process completed.")
+
+def analyze_for_new_terms(log_data, userQuery):
+    system_role = "You are a world-class content strategist and trend analyst specializing in YouTube content. Your task is to analyze search results and identify both specific and broader, popular topics related to the user's query."
+
+    prompt = f"""
+        Analyze the following YouTube data and suggest relevant references and new search terms for further exploration:
+        User Query: {userQuery}
+        Data: {log_data}
+
+        Provide the analysis addressing the following:
+        1. Identify and list 3 specific references relevant to the user query.
+        2. Explain why each reference is relevant.
+        3. Suggest how each reference can be integrated into the content.
+        4. Highlight potential engagement benefits.
+        5. Recommend 3 new search terms for further exploration.
+
+        Structure your response as follows:
+
+        Explanation:
+        1. [reference to include 1]
+          - Relevance: [explain]
+          - Integration method: [suggested method]
+          - Engagement benefit: [explain]
+
+        Search Terms:
+        Specific:
+        1. [specific_term1]: [brief explanation]
+        2. [specific_term2]: [brief explanation]
+        3. [specific_term3]: [brief explanation]
+
+        Broader:
+        1. [broad_term1]: [brief explanation]
+        2. [broad_term2]: [brief explanation]
+
+
+        <newSearchTerms>
+        ["specific_term", "broad_term", a "broad_term" or "specific_term"]
+        </newSearchTerms>
+
+        Ensure that your response follows this exact structure, as it will be parsed programmatically.
+    """
+
+    analysis = llm_api_utils.call_gpt4(prompt=prompt, system_role=system_role)
+    # Printing the raw response from the API
+
+    print(f"Raw response from GPT-4 Analysis: {analysis}")
+    return extract_tag(analysis, "newSearchTerms")
+
+def search_and_log(youtube, search_terms, log_title):
+    print(f"Searching for videos with terms: {', '.join(search_terms)}")
+    relevant_videos = search_videos(youtube, search_terms)
+    print(f"Found {len(relevant_videos)} relevant videos:")
+    print_video_list(relevant_videos)
+
+    logged_data = {
+        log_title: log_title
+        search_terms: search_terms,
+        relevant_videos: relevant_videos,
+        'timestamp': datetime.datetime.now().isoformat()
+    }
+
+    log_data(logged_data,includeTimestampDivider=False)
+    return relevant_videos
 
 def print_video_list(video_list, max_display=5):
     """Print a list of videos with their titles, limiting the output."""
@@ -122,32 +136,6 @@ def extract_tag(analysis, searchTerm):
     end_index = analysis.find(end_tag)
     terms_string = analysis[start_index:end_index].strip()
     return eval(terms_string)  # Convert string representation of list to actual list
-
-def get_trending_videos_by_categories(youtube, category_ids, max_results=trendingVideosNums):
-    trending_videos = []
-    for category_id in category_ids:
-        request = youtube.videos().list(
-            part="snippet,statistics",
-            chart="mostPopular",
-            regionCode="US",
-            videoCategoryId=category_id,
-            maxResults=max_results
-        )
-        response = request.execute()
-
-        for item in response['items']:
-            video = {
-                'id': item['id'],
-                'title': item['snippet']['title'],
-                'description': item['snippet']['description'],
-                'view_count': item['statistics']['viewCount'],
-                'like_count': item['statistics'].get('likeCount', 'N/A'),
-                'comment_count': item['statistics'].get('commentCount', 'N/A'),
-                'published_at': item['snippet']['publishedAt'],
-                'category_id': category_id
-            }
-            trending_videos.append(video)
-    return trending_videos
 
 def get_video_comments(youtube, video_id, max_results=videoCommentsNums):
     request = youtube.commentThreads().list(
